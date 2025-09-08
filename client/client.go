@@ -2,6 +2,7 @@ package client
 
 import "fmt"
 
+// Client represents a network client that can connect to the server using either TCP or UDP (unicast/multicast).
 type Client struct {
 	Protocol string // "tcp", "udp-unicast", "udp-multicast"
 	Addr     string

@@ -5,6 +5,8 @@ import (
 	"sync"
 )
 
+// Server represents our backend server.
+// For now, it's just a skeleton with TCP/UDP start methods.
 type Server struct{}
 
 var (
