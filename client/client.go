@@ -53,6 +53,10 @@ func (c *Client) connectTCP() error {
 
 // SendAuth sends authentication message
 func (c *Client) SendAuth() error {
+	if c.conn == nil {
+		return fmt.Errorf("connection not established")
+	}
+
 	auth := protocol.AuthMessage{
 		Username: c.Username,
 		Password: c.Password,
@@ -72,6 +76,10 @@ func (c *Client) SendAuth() error {
 // SendTime sends current time to server and waits for ACK
 // Retries up to 5 times if no ACK received within 2 seconds
 func (c *Client) SendTime() error {
+	if c.conn == nil {
+		return fmt.Errorf("connection not established")
+	}
+
 	tmsg := protocol.TimeMessage{
 		Timestamp: time.Now(),
 	}
