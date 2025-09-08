@@ -1,8 +1,11 @@
 package protocol
 
 import (
+	"encoding/json"
 	"time"
 )
+
+// Messages
 
 type AuthMessage struct {
 	Username string `json:"username"`
@@ -15,4 +18,18 @@ type TimeMessage struct {
 
 type AckMessage struct {
 	Status string `json:"status"`
+}
+
+// Serialization Helpers
+
+func Encode(v any) ([]byte, error) {
+	data, err := json.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+	return append(data, '\n'), nil
+}
+
+func Decode(data []byte, v any) error {
+	return json.Unmarshal(data, v)
 }
