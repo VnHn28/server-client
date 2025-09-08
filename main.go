@@ -3,6 +3,7 @@ package main
 import (
 	"server-client/client"
 	"server-client/server"
+	"time"
 )
 
 func main() {
@@ -12,7 +13,7 @@ func main() {
 	go srv.StartUDPUnicast(":9001")
 	go srv.StartUDPMulticast(":9002")
 
-	// Start sample client
+	// Start TCP client
 	clientA := client.Client{
 		Protocol: "tcp",
 		Addr:     "localhost:9000",
@@ -20,9 +21,13 @@ func main() {
 		Password: "secret",
 	}
 
-	clientA.Connect()
+	if err := clientA.Connect(); err != nil {
+		panic(err)
+	}
 	clientA.SendAuth()
-	clientA.SendTime()
 
-	select {}
+	for {
+		clientA.SendTime()
+		time.Sleep(7 * time.Second)
+	}
 }
