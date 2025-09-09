@@ -30,6 +30,10 @@ func Encode(v any) ([]byte, error) {
 	return append(data, '\n'), nil
 }
 
+func EncodeUDP(v any) ([]byte, error) {
+	return json.Marshal(v)
+}
+
 func Decode(data []byte, v any) error {
 	return json.Unmarshal(data, v)
 }

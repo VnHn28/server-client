@@ -66,7 +66,7 @@ func (c *Client) connectUDPUnicast() error {
 	fmt.Printf("[%s client] connected to %s\n", c.Protocol, c.Addr)
 
 	auth := protocol.AuthMessage{Username: c.Username, Password: c.Password}
-	authBytes, _ := protocol.Encode(auth)
+	authBytes, _ := protocol.EncodeUDP(auth)
 	if _, err := conn.Write(authBytes); err != nil {
 		return fmt.Errorf("failed to send auth: %w", err)
 	}
@@ -103,7 +103,7 @@ func (c *Client) connectUDPMulticast() error {
 	fmt.Printf("[%s client] connected to %s\n", c.Protocol, c.Addr)
 
 	auth := protocol.AuthMessage{Username: c.Username, Password: c.Password}
-	authBytes, _ := protocol.Encode(auth)
+	authBytes, _ := protocol.EncodeUDP(auth)
 	if _, err := conn.Write(authBytes); err != nil {
 		return fmt.Errorf("failed to send auth: %w", err)
 	}
@@ -132,7 +132,12 @@ func (c *Client) SendTime() {
 	}
 
 	tmsg := protocol.TimeMessage{Timestamp: time.Now()}
-	data, _ := protocol.Encode(tmsg)
+	var data []byte
+	if c.Protocol == "udp-unicast" || c.Protocol == "udp-multicast" {
+		data, _ = protocol.EncodeUDP(tmsg)
+	} else {
+		data, _ = protocol.Encode(tmsg)
+	}
 
 	maxRetries := 5
 	for attempt := 1; attempt <= maxRetries; attempt++ {
