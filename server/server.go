@@ -32,7 +32,7 @@ func GetServer() *Server {
 func (s *Server) StartTCP(addr string) error {
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
-		return fmt.Errorf("TCP listen error: %w", err)
+		return fmt.Errorf("[SERVER-TCP] TCP listen error: %w", err)
 	}
 	fmt.Println("[SERVER-TCP] TCP listening on", addr)
 
@@ -69,6 +69,13 @@ func (s *Server) handleTCPConn(conn net.Conn) {
 	}
 	fmt.Println("[SERVER-TCP] client authenticated:", auth.Username)
 
+	ack := protocol.AckMessage{Status: "ACK_AUTH"}
+	ackBytes, _ := protocol.Encode(ack)
+	if _, err := conn.Write(ackBytes); err != nil {
+		fmt.Println("[SERVER-TCP] failed to send ACK_AUTH:", err)
+		return
+	}
+
 	for {
 		timeBytes, err := reader.ReadBytes('\n')
 		if err != nil {
@@ -84,10 +91,10 @@ func (s *Server) handleTCPConn(conn net.Conn) {
 
 		fmt.Printf("[SERVER-TCP] received time from %s: %v\n", auth.Username, tmsg.Timestamp)
 
-		ack := protocol.AckMessage{Status: "OK"}
+		ack := protocol.AckMessage{Status: "ACK_TIME"}
 		ackBytes, _ := protocol.Encode(ack)
 		if _, err := conn.Write(ackBytes); err != nil {
-			fmt.Println("[SERVER-TCP] failed to send ACK:", err)
+			fmt.Println("[SERVER-TCP] failed to send ACK_TIME:", err)
 			return
 		}
 	}
@@ -102,7 +109,7 @@ func (s *Server) StartUDPUnicast(addr string) error {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println("Starting UDP unicast server on", addr)
+	fmt.Println("[SERVER-UDP] UDP unicast server on", addr)
 
 	return s.handleUDPUnicastConn(conn)
 }
@@ -129,8 +136,8 @@ func (s *Server) handleUDPUnicastConn(conn *net.UDPConn) error {
 				udpClients.authed[addrKey] = true
 				udpClients.Unlock()
 				fmt.Printf("[SERVER-UDP] client authenticated: %s (addr=%s)\n", u, clientAddr)
-				ack := protocol.AckMessage{Status: "AUTHENTICATED"}
-				data, _ := protocol.Encode(ack)
+				ack := protocol.AckMessage{Status: "ACK_AUTH"}
+				data, _ := protocol.EncodeUDP(ack)
 				conn.WriteToUDP(data, clientAddr)
 			} else {
 				fmt.Printf("[SERVER-UDP] invalid credentials for %s\n", u)
@@ -148,8 +155,8 @@ func (s *Server) handleUDPUnicastConn(conn *net.UDPConn) error {
 			}
 
 			fmt.Printf("[SERVER-UDP] received time from %s: %v\n", clientAddr, ts)
-			ack := protocol.AckMessage{Status: "OK"}
-			data, _ := protocol.Encode(ack)
+			ack := protocol.AckMessage{Status: "ACK_TIME"}
+			data, _ := protocol.EncodeUDP(ack)
 			conn.WriteToUDP(data, clientAddr)
 		}
 	}
@@ -164,7 +171,7 @@ func (s *Server) StartUDPMulticast(addr string) error {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println("Starting UDP multicast server on", addr)
+	fmt.Println("[SERVER-MULTICAST] UDP multicast server on", addr)
 
 	conn.SetReadBuffer(1024)
 	return s.handleUDPMulticastConn(conn)
@@ -192,8 +199,8 @@ func (s *Server) handleUDPMulticastConn(conn *net.UDPConn) error {
 				udpClients.authed[addrKey] = true
 				udpClients.Unlock()
 				fmt.Printf("[SERVER-MULTICAST] client authenticated: %s (addr=%s)\n", u, clientAddr)
-				ack := protocol.AckMessage{Status: "AUTHENTICATED"}
-				data, _ := protocol.Encode(ack)
+				ack := protocol.AckMessage{Status: "ACK_AUTH"}
+				data, _ := protocol.EncodeUDP(ack)
 				conn.WriteToUDP(data, clientAddr)
 			} else {
 				fmt.Printf("[SERVER-MULTICAST] invalid credentials for %s\n", u)
@@ -211,8 +218,8 @@ func (s *Server) handleUDPMulticastConn(conn *net.UDPConn) error {
 			}
 
 			fmt.Printf("[SERVER-MULTICAST] received time from %s: %v\n", clientAddr, ts)
-			ack := protocol.AckMessage{Status: "OK"}
-			data, _ := protocol.Encode(ack)
+			ack := protocol.AckMessage{Status: "ACK_TIME"}
+			data, _ := protocol.EncodeUDP(ack)
 			conn.WriteToUDP(data, clientAddr)
 		}
 	}
