@@ -35,7 +35,7 @@ func (c *Client) connectTCP() error {
 		return fmt.Errorf("tcp dial failed: %w", err)
 	}
 	c.conn = conn
-	fmt.Printf("[%s client] connected to %s\n", c.Protocol, c.Addr)
+	fmt.Printf("[client %s %s] connected to %s\n", c.Protocol, c.Username, c.Addr)
 
 	auth := protocol.AuthMessage{Username: c.Username, Password: c.Password}
 	authBytes, _ := protocol.Encode(auth)
@@ -52,7 +52,7 @@ func (c *Client) connectTCP() error {
 	if err := protocol.Decode(ackBytes, &ack); err != nil {
 		return fmt.Errorf("decode ack failed: %w", err)
 	}
-	fmt.Printf("[%s client] received ack: %s\n", c.Protocol, ack.Status)
+	fmt.Printf("[client %s %s] received ack: %s\n", c.Protocol, c.Username, ack.Status)
 
 	return nil
 }
@@ -63,7 +63,7 @@ func (c *Client) connectUDPUnicast() error {
 		return fmt.Errorf("udp-unicast dial failed: %w", err)
 	}
 	c.conn = conn
-	fmt.Printf("[%s client] connected to %s\n", c.Protocol, c.Addr)
+	fmt.Printf("[client %s %s] connected to %s\n", c.Protocol, c.Username, c.Addr)
 
 	auth := protocol.AuthMessage{Username: c.Username, Password: c.Password}
 	authBytes, _ := protocol.EncodeUDP(auth)
@@ -81,7 +81,7 @@ func (c *Client) connectUDPUnicast() error {
 	if err := protocol.Decode(buf[:n], &ack); err != nil {
 		return fmt.Errorf("decode ack failed: %w", err)
 	}
-	fmt.Printf("[%s client] received ack: %s\n", c.Protocol, ack.Status)
+	fmt.Printf("[client %s %s] received ack: %s\n", c.Protocol, c.Username, ack.Status)
 
 	return nil
 }
@@ -100,7 +100,7 @@ func (c *Client) connectUDPMulticast() error {
 		return fmt.Errorf("udp-multicast dial failed: %w", err)
 	}
 	c.conn = conn
-	fmt.Printf("[%s client] connected to %s\n", c.Protocol, c.Addr)
+	fmt.Printf("[client %s %s] connected to %s\n", c.Protocol, c.Username, c.Addr)
 
 	auth := protocol.AuthMessage{Username: c.Username, Password: c.Password}
 	authBytes, _ := protocol.EncodeUDP(auth)
@@ -112,15 +112,15 @@ func (c *Client) connectUDPMulticast() error {
 	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
 	n, _, err := conn.ReadFromUDP(buf)
 	if err != nil {
-		fmt.Printf("[%s client] warning: did not receive ACK (multicast ACKs may be unreliable): %v\n", c.Protocol, err)
+		fmt.Printf("[client %s %s] warning: did not receive ACK (multicast ACKs may be unreliable): %v\n", c.Protocol, c.Username, err)
 		return nil
 	}
 	var ack protocol.AckMessage
 	if err := protocol.Decode(buf[:n], &ack); err != nil {
-		fmt.Printf("[%s client] warning: failed to decode ACK (multicast): %v\n", c.Protocol, err)
+		fmt.Printf("[client %s %s] warning: failed to decode ACK (multicast): %v\n", c.Protocol, c.Username, err)
 		return nil
 	}
-	fmt.Printf("[%s client] received ack: %s\n", c.Protocol, ack.Status)
+	fmt.Printf("[client %s %s] received ack: %s\n", c.Protocol, c.Username, ack.Status)
 
 	return nil
 }
@@ -129,7 +129,7 @@ func (c *Client) connectUDPMulticast() error {
 // Retries up to 5 times if no ACK received within 2 seconds
 func (c *Client) SendTime() {
 	if c.conn == nil {
-		fmt.Printf("[%s client] no connection, cannot send time\n", c.Protocol)
+		fmt.Printf("[client %s %s] no connection, cannot send time\n", c.Protocol, c.Username)
 		return
 	}
 
@@ -144,12 +144,12 @@ func (c *Client) SendTime() {
 	maxRetries := 5
 	for attempt := 1; attempt <= maxRetries; attempt++ {
 		if _, err := c.conn.Write(data); err != nil {
-			fmt.Printf("[%s client] failed to send time: %v\n", c.Protocol, err)
+			fmt.Printf("[client %s %s] failed to send time: %v\n", c.Protocol, c.Username, err)
 			return
 		}
 
 		if err := c.conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
-			fmt.Printf("[%s client] failed to set deadline: %v\n", c.Protocol, err)
+			fmt.Printf("[client %s %s] failed to set deadline: %v\n", c.Protocol, c.Username, err)
 			return
 		}
 
@@ -158,15 +158,15 @@ func (c *Client) SendTime() {
 		if err == nil {
 			var ack protocol.AckMessage
 			if decodeErr := protocol.Decode(buf[:n], &ack); decodeErr == nil {
-				fmt.Printf("[%s client] received ack: %s\n", c.Protocol, ack.Status)
+				fmt.Printf("[client %s %s] received ack: %s\n", c.Protocol, c.Username, ack.Status)
 				return
 			}
 		}
 
-		fmt.Printf("[%s client] attempt %d/%d: no ack received, retrying...\n", c.Protocol, attempt, maxRetries)
+		fmt.Printf("[client %s %s] attempt %d/%d: no ack received, retrying...\n", c.Protocol, c.Username, attempt, maxRetries)
 	}
 
-	fmt.Printf("[%s client] no ack after %d attempts, closing connection\n", c.Protocol, maxRetries)
+	fmt.Printf("[client %s %s] no ack after %d attempts, closing connection\n", c.Protocol, c.Username, maxRetries)
 	c.conn.Close()
 	c.conn = nil
 }

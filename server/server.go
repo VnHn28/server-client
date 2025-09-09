@@ -154,7 +154,7 @@ func (s *Server) handleUDPUnicastConn(conn *net.UDPConn) error {
 				continue
 			}
 
-			fmt.Printf("[SERVER-UDP] received time from %s: %v\n", clientAddr, ts)
+			fmt.Printf("[SERVER-UDP] received time from %s: %v\n", addrKey, ts)
 			ack := protocol.AckMessage{Status: "ACK_TIME"}
 			data, _ := protocol.EncodeUDP(ack)
 			conn.WriteToUDP(data, clientAddr)
@@ -217,7 +217,7 @@ func (s *Server) handleUDPMulticastConn(conn *net.UDPConn) error {
 				continue
 			}
 
-			fmt.Printf("[SERVER-MULTICAST] received time from %s: %v\n", clientAddr, ts)
+			fmt.Printf("[SERVER-MULTICAST] received time from %s: %v\n", addrKey, ts)
 			ack := protocol.AckMessage{Status: "ACK_TIME"}
 			data, _ := protocol.EncodeUDP(ack)
 			conn.WriteToUDP(data, clientAddr)

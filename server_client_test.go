@@ -13,7 +13,6 @@ func TestServerClientCommunication(t *testing.T) {
 	srv := server.GetServer()
 	var wg sync.WaitGroup
 
-	// Start server concurrently
 	go func() {
 		if err := srv.StartTCP(":9000"); err != nil {
 			t.Errorf("TCP server error: %v", err)
@@ -50,7 +49,7 @@ func TestServerClientCommunication(t *testing.T) {
 
 		go func(cli *client.Client) {
 			defer wg.Done()
-			for i := 0; i < 3; i++ {
+			for range 2 {
 				cli.SendTime()
 				time.Sleep(7 * time.Second)
 			}

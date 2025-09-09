@@ -8,7 +8,6 @@ import (
 )
 
 func main() {
-	// Start server
 	srv := server.GetServer()
 	go func() {
 		if err := srv.StartTCP(":9000"); err != nil {
@@ -28,12 +27,11 @@ func main() {
 
 	time.Sleep(500 * time.Millisecond)
 
-	// --- Clients ---
 	clients := []*client.Client{
-		{Protocol: "tcp", Addr: "localhost:9000", Username: "alice", Password: "secret"},
-		{Protocol: "udp-unicast", Addr: "localhost:9001", Username: "bob", Password: "secret"},
-		{Protocol: "udp-multicast", Addr: "224.0.0.1:9002", Username: "chris", Password: "secret"},
-		{Protocol: "udp-multicast", Addr: "224.0.0.1:9002", Username: "dick", Password: "secret"},
+		{Protocol: "tcp", Addr: "localhost:9000", Username: "alice", Password: "secret"},           //Client A
+		{Protocol: "udp-unicast", Addr: "localhost:9001", Username: "bob", Password: "secret"},     //Client B
+		{Protocol: "udp-multicast", Addr: "224.0.0.1:9002", Username: "chris", Password: "secret"}, //Client C
+		{Protocol: "udp-multicast", Addr: "224.0.0.1:9002", Username: "dick", Password: "secret"},  //Client D
 	}
 
 	for _, c := range clients {
