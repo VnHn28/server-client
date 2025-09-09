@@ -35,21 +35,18 @@ func (c *Client) connectTCP() error {
 	if err != nil {
 		return fmt.Errorf("tcp dial failed: %w", err)
 	}
+	c.conn = conn
 	fmt.Printf("[%s client] connected to %s\n", c.Protocol, c.Addr)
 
 	auth := protocol.AuthMessage{Username: c.Username, Password: c.Password}
 	authBytes, _ := protocol.Encode(auth)
 	_, _ = conn.Write(authBytes)
 
-	tmsg := protocol.TimeMessage{Timestamp: time.Now()}
-	tBytes, _ := protocol.Encode(tmsg)
-	_, _ = conn.Write(tBytes)
-
 	reader := bufio.NewReader(conn)
 	ackBytes, _ := reader.ReadBytes('\n')
 	var ack protocol.AckMessage
 	_ = protocol.Decode(ackBytes, &ack)
-	fmt.Println("[CLIENT] received ack:", ack.Status)
+	fmt.Printf("[%s client] received ack: %s\n", c.Protocol, ack.Status)
 
 	return nil
 }
@@ -66,15 +63,16 @@ func (c *Client) connectUDPUnicast() error {
 	authBytes, _ := protocol.Encode(auth)
 	_, _ = conn.Write(authBytes)
 
-	tmsg := protocol.TimeMessage{Timestamp: time.Now()}
-	tBytes, _ := protocol.Encode(tmsg)
-	_, _ = conn.Write(tBytes)
-
-	reader := bufio.NewReader(conn)
-	ackBytes, _ := reader.ReadBytes('\n')
+	buf := make([]byte, 1024)
+	n, err := conn.Read(buf)
+	if err != nil {
+		return fmt.Errorf("failed to read ack: %w", err)
+	}
 	var ack protocol.AckMessage
-	_ = protocol.Decode(ackBytes, &ack)
-	fmt.Println("[CLIENT] received ack:", ack.Status)
+	if err := protocol.Decode(buf[:n], &ack); err != nil {
+		return fmt.Errorf("decode ack failed: %w", err)
+	}
+	fmt.Printf("[%s client] received ack: %s\n", c.Protocol, ack.Status)
 
 	return nil
 }
@@ -99,15 +97,16 @@ func (c *Client) connectUDPMulticast() error {
 	authBytes, _ := protocol.Encode(auth)
 	_, _ = conn.Write(authBytes)
 
-	tmsg := protocol.TimeMessage{Timestamp: time.Now()}
-	tBytes, _ := protocol.Encode(tmsg)
-	_, _ = conn.Write(tBytes)
-
-	reader := bufio.NewReader(conn)
-	ackBytes, _ := reader.ReadBytes('\n')
+	buf := make([]byte, 1024)
+	n, _, err := conn.ReadFromUDP(buf)
+	if err != nil {
+		return fmt.Errorf("failed to read ack: %w", err)
+	}
 	var ack protocol.AckMessage
-	_ = protocol.Decode(ackBytes, &ack)
-	fmt.Println("[CLIENT] received ack:", ack.Status)
+	if err := protocol.Decode(buf[:n], &ack); err != nil {
+		return fmt.Errorf("decode ack failed: %w", err)
+	}
+	fmt.Printf("[%s client] received ack: %s\n", c.Protocol, ack.Status)
 
 	return nil
 }
@@ -164,15 +163,15 @@ func (c *Client) SendTime() error {
 		if err == nil {
 			var ack protocol.AckMessage
 			if decodeErr := protocol.Decode(raw, &ack); decodeErr == nil {
-				fmt.Printf("[CLIENT] received ack: %s\n", ack.Status)
+				fmt.Printf("[%s client] received ack: %s\n", c.Protocol, ack.Status)
 				return nil // Success
 			}
 		}
 
-		fmt.Printf("[CLIENT] no ack, retrying...\n")
+		fmt.Printf("[%s client] no ack, retrying...\n", c.Protocol)
 	}
 
-	fmt.Printf("[CLIENT] no ack after 5 attempts, closing connection\n")
+	fmt.Printf("[%s client] no ack after 5 attempts, closing connection\n", c.Protocol)
 	c.conn.Close()
 	return fmt.Errorf("failed to receive ack after 5 attempts")
 }
