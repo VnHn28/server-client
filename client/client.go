@@ -112,11 +112,13 @@ func (c *Client) connectUDPMulticast() error {
 	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
 	n, _, err := conn.ReadFromUDP(buf)
 	if err != nil {
-		return fmt.Errorf("failed to read ack: %w", err)
+		fmt.Printf("[%s client] warning: did not receive ACK (multicast ACKs may be unreliable): %v\n", c.Protocol, err)
+		return nil
 	}
 	var ack protocol.AckMessage
 	if err := protocol.Decode(buf[:n], &ack); err != nil {
-		return fmt.Errorf("decode ack failed: %w", err)
+		fmt.Printf("[%s client] warning: failed to decode ACK (multicast): %v\n", c.Protocol, err)
+		return nil
 	}
 	fmt.Printf("[%s client] received ack: %s\n", c.Protocol, ack.Status)
 
