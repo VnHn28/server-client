@@ -17,6 +17,11 @@ var (
 	once     sync.Once
 )
 
+var udpClients = struct {
+	sync.Mutex
+	authed map[string]bool
+}{authed: make(map[string]bool)}
+
 func GetServer() *Server {
 	once.Do(func() {
 		instance = &Server{}
@@ -116,9 +121,33 @@ func (s *Server) handleUDPUnicastConn(conn *net.UDPConn) error {
 			continue
 		}
 
-		if _, ok := msg["timestamp"]; ok {
-			fmt.Printf("[SERVER-UDP] received time from %s: %v\n",
-				clientAddr, msg["timestamp"])
+		addrKey := clientAddr.String()
+
+		if u, ok := msg["username"]; ok {
+			if s.validateUser(fmt.Sprint(msg["username"]), fmt.Sprint(msg["password"])) {
+				udpClients.Lock()
+				udpClients.authed[addrKey] = true
+				udpClients.Unlock()
+				fmt.Printf("[SERVER-UDP] client authenticated: %s (addr=%s)\n", u, clientAddr)
+				ack := protocol.AckMessage{Status: "AUTHENTICATED"}
+				data, _ := protocol.Encode(ack)
+				conn.WriteToUDP(data, clientAddr)
+			} else {
+				fmt.Printf("[SERVER-UDP] invalid credentials for %s\n", u)
+			}
+			continue
+		}
+
+		if ts, ok := msg["timestamp"]; ok {
+			udpClients.Lock()
+			authed := udpClients.authed[addrKey]
+			udpClients.Unlock()
+			if !authed {
+				fmt.Printf("[SERVER-UDP] ignoring time from unauthenticated client %s\n", addrKey)
+				continue
+			}
+
+			fmt.Printf("[SERVER-UDP] received time from %s: %v\n", clientAddr, ts)
 			ack := protocol.AckMessage{Status: "OK"}
 			data, _ := protocol.Encode(ack)
 			conn.WriteToUDP(data, clientAddr)
@@ -155,9 +184,33 @@ func (s *Server) handleUDPMulticastConn(conn *net.UDPConn) error {
 			continue
 		}
 
-		if _, ok := msg["timestamp"]; ok {
-			fmt.Printf("[SERVER-MULTICAST] received time from %s: %v\n",
-				clientAddr, msg["timestamp"])
+		addrKey := clientAddr.String()
+
+		if u, ok := msg["username"]; ok {
+			if s.validateUser(fmt.Sprint(msg["username"]), fmt.Sprint(msg["password"])) {
+				udpClients.Lock()
+				udpClients.authed[addrKey] = true
+				udpClients.Unlock()
+				fmt.Printf("[SERVER-MULTICAST] client authenticated: %s (addr=%s)\n", u, clientAddr)
+				ack := protocol.AckMessage{Status: "AUTHENTICATED"}
+				data, _ := protocol.Encode(ack)
+				conn.WriteToUDP(data, clientAddr)
+			} else {
+				fmt.Printf("[SERVER-MULTICAST] invalid credentials for %s\n", u)
+			}
+			continue
+		}
+
+		if ts, ok := msg["timestamp"]; ok {
+			udpClients.Lock()
+			authed := udpClients.authed[addrKey]
+			udpClients.Unlock()
+			if !authed {
+				fmt.Printf("[SERVER-MULTICAST] ignoring time from unauthenticated client %s\n", addrKey)
+				continue
+			}
+
+			fmt.Printf("[SERVER-MULTICAST] received time from %s: %v\n", clientAddr, ts)
 			ack := protocol.AckMessage{Status: "OK"}
 			data, _ := protocol.Encode(ack)
 			conn.WriteToUDP(data, clientAddr)
