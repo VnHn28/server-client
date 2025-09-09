@@ -2,7 +2,6 @@ package server
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"net"
 	"server-client/protocol"
@@ -18,7 +17,6 @@ var (
 	once     sync.Once
 )
 
-// GetServer returns the singleton instance of Server
 func GetServer() *Server {
 	once.Do(func() {
 		instance = &Server{}
@@ -26,18 +24,17 @@ func GetServer() *Server {
 	return instance
 }
 
-// StartTCP starts the TCP listener and handles incoming connections
 func (s *Server) StartTCP(addr string) error {
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("TCP listen error: %w", err)
 	}
-	fmt.Println("[SERVER] TCP listening on", addr)
+	fmt.Println("[SERVER-TCP] TCP listening on", addr)
 
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			fmt.Println("[SERVER] accept error:", err)
+			fmt.Println("[SERVER-TCP] accept error:", err)
 			continue
 		}
 		go s.handleTCPConn(conn)
@@ -51,58 +48,121 @@ func (s *Server) handleTCPConn(conn net.Conn) {
 
 	authBytes, err := reader.ReadBytes('\n')
 	if err != nil {
-		fmt.Println("[SERVER] failed to read auth:", err)
+		fmt.Println("[SERVER-TCP] failed to read auth:", err)
 		return
 	}
 
 	var auth protocol.AuthMessage
-	if err := json.Unmarshal(authBytes, &auth); err != nil {
-		fmt.Println("[SERVER] invalid auth json:", err)
+	if err := protocol.Decode(authBytes, &auth); err != nil {
+		fmt.Println("[SERVER-TCP] invalid auth json:", err)
 		return
 	}
 
 	if !s.validateUser(auth.Username, auth.Password) {
-		fmt.Println("[SERVER] invalid credentials for", auth.Username)
+		fmt.Println("[SERVER-TCP] invalid credentials for", auth.Username)
 		return
 	}
-	fmt.Println("[SERVER] client authenticated:", auth.Username)
+	fmt.Println("[SERVER-TCP] client authenticated:", auth.Username)
 
 	for {
 		timeBytes, err := reader.ReadBytes('\n')
 		if err != nil {
-			fmt.Println("[SERVER] connection closed:", err)
+			fmt.Println("[SERVER-TCP] connection closed:", err)
 			return
 		}
 
 		var tmsg protocol.TimeMessage
-		if err := json.Unmarshal(timeBytes, &tmsg); err != nil {
-			fmt.Println("[SERVER] invalid time message:", err)
+		if err := protocol.Decode(timeBytes, &tmsg); err != nil {
+			fmt.Println("[SERVER-TCP] invalid time message:", err)
 			continue
 		}
 
-		fmt.Printf("[SERVER] received time from %s: %v\n", auth.Username, tmsg.Timestamp)
+		fmt.Printf("[SERVER-TCP] received time from %s: %v\n", auth.Username, tmsg.Timestamp)
 
-		// send ACK
 		ack := protocol.AckMessage{Status: "OK"}
-		ackBytes, _ := json.Marshal(ack)
-		ackBytes = append(ackBytes, '\n')
+		ackBytes, _ := protocol.Encode(ack)
 		if _, err := conn.Write(ackBytes); err != nil {
-			fmt.Println("[SERVER] failed to send ACK:", err)
+			fmt.Println("[SERVER-TCP] failed to send ACK:", err)
 			return
 		}
 	}
 }
 
-// StartUDPUnicast starts the UDP unicast listener (temp)
 func (s *Server) StartUDPUnicast(addr string) error {
+	udpAddr, err := net.ResolveUDPAddr("udp", addr)
+	if err != nil {
+		panic(err)
+	}
+	conn, err := net.ListenUDP("udp", udpAddr)
+	if err != nil {
+		panic(err)
+	}
 	fmt.Println("Starting UDP unicast server on", addr)
-	return nil
+
+	return s.handleUDPUnicastConn(conn)
 }
 
-// StartUDPMulticast starts the UDP multicast listener (temp)
+func (s *Server) handleUDPUnicastConn(conn *net.UDPConn) error {
+	buf := make([]byte, 1024)
+	for {
+		n, clientAddr, err := conn.ReadFromUDP(buf)
+		if err != nil {
+			continue
+		}
+
+		var msg map[string]any
+		if err := protocol.Decode(buf[:n], &msg); err != nil {
+			fmt.Println("[SERVER-UDP] decode error:", err)
+			continue
+		}
+
+		if _, ok := msg["timestamp"]; ok {
+			fmt.Printf("[SERVER-UDP] received time from %s: %v\n",
+				clientAddr, msg["timestamp"])
+			ack := protocol.AckMessage{Status: "OK"}
+			data, _ := protocol.Encode(ack)
+			conn.WriteToUDP(data, clientAddr)
+		}
+	}
+}
+
 func (s *Server) StartUDPMulticast(addr string) error {
+	udpAddr, err := net.ResolveUDPAddr("udp", addr)
+	if err != nil {
+		panic(err)
+	}
+	conn, err := net.ListenMulticastUDP("udp", nil, udpAddr)
+	if err != nil {
+		panic(err)
+	}
 	fmt.Println("Starting UDP multicast server on", addr)
-	return nil
+
+	conn.SetReadBuffer(1024)
+	return s.handleUDPMulticastConn(conn)
+}
+
+func (s *Server) handleUDPMulticastConn(conn *net.UDPConn) error {
+	buf := make([]byte, 1024)
+	for {
+		n, clientAddr, err := conn.ReadFromUDP(buf)
+		if err != nil {
+			continue
+		}
+
+		var msg map[string]any
+		if err := protocol.Decode(buf[:n], &msg); err != nil {
+			fmt.Println("[SERVER-MULTICAST] decode error:", err)
+			continue
+		}
+
+		if _, ok := msg["timestamp"]; ok {
+			fmt.Printf("[SERVER-MULTICAST] received time from %s: %v\n",
+				clientAddr, msg["timestamp"])
+			ack := protocol.AckMessage{Status: "OK"}
+			data, _ := protocol.Encode(ack)
+			conn.WriteToUDP(data, clientAddr)
+		}
+	}
 }
 
 func (s *Server) validateUser(username, password string) bool {
