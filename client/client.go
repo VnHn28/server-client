@@ -16,7 +16,6 @@ type Client struct {
 	conn     net.Conn
 }
 
-// Connect establishes a connection to the server
 func (c *Client) Connect() error {
 	switch c.Protocol {
 	case "tcp":
@@ -40,12 +39,19 @@ func (c *Client) connectTCP() error {
 
 	auth := protocol.AuthMessage{Username: c.Username, Password: c.Password}
 	authBytes, _ := protocol.Encode(auth)
-	_, _ = conn.Write(authBytes)
+	if _, err := conn.Write(authBytes); err != nil {
+		return fmt.Errorf("failed to send auth: %w", err)
+	}
 
 	reader := bufio.NewReader(conn)
-	ackBytes, _ := reader.ReadBytes('\n')
+	ackBytes, err := reader.ReadBytes('\n')
+	if err != nil {
+		return fmt.Errorf("failed to read ack: %w", err)
+	}
 	var ack protocol.AckMessage
-	_ = protocol.Decode(ackBytes, &ack)
+	if err := protocol.Decode(ackBytes, &ack); err != nil {
+		return fmt.Errorf("decode ack failed: %w", err)
+	}
 	fmt.Printf("[%s client] received ack: %s\n", c.Protocol, ack.Status)
 
 	return nil
@@ -61,9 +67,12 @@ func (c *Client) connectUDPUnicast() error {
 
 	auth := protocol.AuthMessage{Username: c.Username, Password: c.Password}
 	authBytes, _ := protocol.Encode(auth)
-	_, _ = conn.Write(authBytes)
+	if _, err := conn.Write(authBytes); err != nil {
+		return fmt.Errorf("failed to send auth: %w", err)
+	}
 
 	buf := make([]byte, 1024)
+	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
 	n, err := conn.Read(buf)
 	if err != nil {
 		return fmt.Errorf("failed to read ack: %w", err)
@@ -95,9 +104,12 @@ func (c *Client) connectUDPMulticast() error {
 
 	auth := protocol.AuthMessage{Username: c.Username, Password: c.Password}
 	authBytes, _ := protocol.Encode(auth)
-	_, _ = conn.Write(authBytes)
+	if _, err := conn.Write(authBytes); err != nil {
+		return fmt.Errorf("failed to send auth: %w", err)
+	}
 
 	buf := make([]byte, 1024)
+	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
 	n, _, err := conn.ReadFromUDP(buf)
 	if err != nil {
 		return fmt.Errorf("failed to read ack: %w", err)
@@ -108,28 +120,6 @@ func (c *Client) connectUDPMulticast() error {
 	}
 	fmt.Printf("[%s client] received ack: %s\n", c.Protocol, ack.Status)
 
-	return nil
-}
-
-// SendAuth sends authentication message
-func (c *Client) SendAuth() error {
-	if c.conn == nil {
-		return fmt.Errorf("connection not established")
-	}
-
-	auth := protocol.AuthMessage{
-		Username: c.Username,
-		Password: c.Password,
-	}
-	data, err := protocol.Encode(auth)
-	if err != nil {
-		return err
-	}
-	_, err = c.conn.Write(data)
-	if err != nil {
-		return err
-	}
-	fmt.Printf("[%s client] Sending auth (user=%s)\n", c.Protocol, c.Username)
 	return nil
 }
 
@@ -149,22 +139,34 @@ func (c *Client) SendTime() error {
 	}
 
 	for attempt := 1; attempt <= 5; attempt++ {
-		// Send message
-		_, err := c.conn.Write(data)
-		if err != nil {
+		if _, err := c.conn.Write(data); err != nil {
 			return err
 		}
 		fmt.Printf("[%s client] Sending time message (attempt %d)\n", c.Protocol, attempt)
 
-		// Wait for ACK with timeout
 		c.conn.SetReadDeadline(time.Now().Add(2 * time.Second))
-		reader := bufio.NewReader(c.conn)
-		raw, err := reader.ReadBytes('\n')
-		if err == nil {
-			var ack protocol.AckMessage
-			if decodeErr := protocol.Decode(raw, &ack); decodeErr == nil {
-				fmt.Printf("[%s client] received ack: %s\n", c.Protocol, ack.Status)
-				return nil // Success
+
+		var ack protocol.AckMessage
+		buf := make([]byte, 1024)
+
+		switch conn := c.conn.(type) {
+		case *net.TCPConn:
+			reader := bufio.NewReader(conn)
+			raw, err := reader.ReadBytes('\n')
+			if err == nil {
+				if decodeErr := protocol.Decode(raw, &ack); decodeErr == nil {
+					fmt.Printf("[%s client] received ack: %s\n", c.Protocol, ack.Status)
+					return nil
+				}
+			}
+
+		case *net.UDPConn:
+			n, _, err := conn.ReadFromUDP(buf)
+			if err == nil {
+				if decodeErr := protocol.Decode(buf[:n], &ack); decodeErr == nil {
+					fmt.Printf("[%s client] received ack: %s\n", c.Protocol, ack.Status)
+					return nil
+				}
 			}
 		}
 
