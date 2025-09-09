@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// Messages
+// Message Structs
 
 type AuthMessage struct {
 	Username string `json:"username"`

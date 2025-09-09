@@ -2,7 +2,6 @@ package client
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"net"
 	"server-client/protocol"
@@ -19,10 +18,16 @@ type Client struct {
 
 // Connect establishes a connection to the server
 func (c *Client) Connect() error {
-	if c.Protocol == "tcp" {
+	switch c.Protocol {
+	case "tcp":
 		return c.connectTCP()
+	case "udp-unicast":
+		return c.connectUDPUnicast()
+	case "udp-multicast":
+		return c.connectUDPMulticast()
+	default:
+		return fmt.Errorf("unsupported protocol: %s", c.Protocol)
 	}
-	return fmt.Errorf("protocol %s not implemented yet", c.Protocol)
 }
 
 func (c *Client) connectTCP() error {
@@ -33,19 +38,75 @@ func (c *Client) connectTCP() error {
 	fmt.Printf("[%s client] connected to %s\n", c.Protocol, c.Addr)
 
 	auth := protocol.AuthMessage{Username: c.Username, Password: c.Password}
-	authBytes, _ := json.Marshal(auth)
-	authBytes = append(authBytes, '\n')
+	authBytes, _ := protocol.Encode(auth)
 	_, _ = conn.Write(authBytes)
 
 	tmsg := protocol.TimeMessage{Timestamp: time.Now()}
-	tBytes, _ := json.Marshal(tmsg)
-	tBytes = append(tBytes, '\n')
+	tBytes, _ := protocol.Encode(tmsg)
 	_, _ = conn.Write(tBytes)
 
 	reader := bufio.NewReader(conn)
 	ackBytes, _ := reader.ReadBytes('\n')
 	var ack protocol.AckMessage
-	_ = json.Unmarshal(ackBytes, &ack)
+	_ = protocol.Decode(ackBytes, &ack)
+	fmt.Println("[CLIENT] received ack:", ack.Status)
+
+	return nil
+}
+
+func (c *Client) connectUDPUnicast() error {
+	conn, err := net.Dial("udp", c.Addr)
+	if err != nil {
+		return fmt.Errorf("udp-unicast dial failed: %w", err)
+	}
+	c.conn = conn
+	fmt.Printf("[%s client] connected to %s\n", c.Protocol, c.Addr)
+
+	auth := protocol.AuthMessage{Username: c.Username, Password: c.Password}
+	authBytes, _ := protocol.Encode(auth)
+	_, _ = conn.Write(authBytes)
+
+	tmsg := protocol.TimeMessage{Timestamp: time.Now()}
+	tBytes, _ := protocol.Encode(tmsg)
+	_, _ = conn.Write(tBytes)
+
+	reader := bufio.NewReader(conn)
+	ackBytes, _ := reader.ReadBytes('\n')
+	var ack protocol.AckMessage
+	_ = protocol.Decode(ackBytes, &ack)
+	fmt.Println("[CLIENT] received ack:", ack.Status)
+
+	return nil
+}
+
+func (c *Client) connectUDPMulticast() error {
+	laddr, err := net.ResolveUDPAddr("udp", "0.0.0.0:0")
+	if err != nil {
+		return err
+	}
+	raddr, err := net.ResolveUDPAddr("udp", c.Addr)
+	if err != nil {
+		return err
+	}
+	conn, err := net.DialUDP("udp", laddr, raddr)
+	if err != nil {
+		return fmt.Errorf("udp-multicast dial failed: %w", err)
+	}
+	c.conn = conn
+	fmt.Printf("[%s client] connected to %s\n", c.Protocol, c.Addr)
+
+	auth := protocol.AuthMessage{Username: c.Username, Password: c.Password}
+	authBytes, _ := protocol.Encode(auth)
+	_, _ = conn.Write(authBytes)
+
+	tmsg := protocol.TimeMessage{Timestamp: time.Now()}
+	tBytes, _ := protocol.Encode(tmsg)
+	_, _ = conn.Write(tBytes)
+
+	reader := bufio.NewReader(conn)
+	ackBytes, _ := reader.ReadBytes('\n')
+	var ack protocol.AckMessage
+	_ = protocol.Decode(ackBytes, &ack)
 	fmt.Println("[CLIENT] received ack:", ack.Status)
 
 	return nil
