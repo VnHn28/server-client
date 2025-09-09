@@ -125,55 +125,51 @@ func (c *Client) connectUDPMulticast() error {
 
 // SendTime sends current time to server and waits for ACK
 // Retries up to 5 times if no ACK received within 2 seconds
-func (c *Client) SendTime() error {
+func (c *Client) SendTime() {
 	if c.conn == nil {
-		return fmt.Errorf("connection not established")
+		fmt.Printf("[%s client] no connection, cannot send time\n", c.Protocol)
+		return
 	}
 
-	tmsg := protocol.TimeMessage{
-		Timestamp: time.Now(),
-	}
-	data, err := protocol.Encode(tmsg)
-	if err != nil {
-		return err
-	}
+	tmsg := protocol.TimeMessage{Timestamp: time.Now()}
+	data, _ := protocol.Encode(tmsg)
 
-	for attempt := 1; attempt <= 5; attempt++ {
+	maxRetries := 5
+	for attempt := 1; attempt <= maxRetries; attempt++ {
 		if _, err := c.conn.Write(data); err != nil {
-			return err
+			fmt.Printf("[%s client] failed to send time: %v\n", c.Protocol, err)
+			return
 		}
-		fmt.Printf("[%s client] Sending time message (attempt %d)\n", c.Protocol, attempt)
 
-		c.conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+		if err := c.conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+			fmt.Printf("[%s client] failed to set deadline: %v\n", c.Protocol, err)
+			return
+		}
 
-		var ack protocol.AckMessage
 		buf := make([]byte, 1024)
-
-		switch conn := c.conn.(type) {
-		case *net.TCPConn:
-			reader := bufio.NewReader(conn)
-			raw, err := reader.ReadBytes('\n')
-			if err == nil {
-				if decodeErr := protocol.Decode(raw, &ack); decodeErr == nil {
-					fmt.Printf("[%s client] received ack: %s\n", c.Protocol, ack.Status)
-					return nil
-				}
-			}
-
-		case *net.UDPConn:
-			n, _, err := conn.ReadFromUDP(buf)
-			if err == nil {
-				if decodeErr := protocol.Decode(buf[:n], &ack); decodeErr == nil {
-					fmt.Printf("[%s client] received ack: %s\n", c.Protocol, ack.Status)
-					return nil
-				}
+		n, _, err := c.readFromConn(buf)
+		if err == nil {
+			var ack protocol.AckMessage
+			if decodeErr := protocol.Decode(buf[:n], &ack); decodeErr == nil {
+				fmt.Printf("[%s client] received ack: %s\n", c.Protocol, ack.Status)
+				return
 			}
 		}
 
-		fmt.Printf("[%s client] no ack, retrying...\n", c.Protocol)
+		fmt.Printf("[%s client] attempt %d/%d: no ack received, retrying...\n", c.Protocol, attempt, maxRetries)
 	}
 
-	fmt.Printf("[%s client] no ack after 5 attempts, closing connection\n", c.Protocol)
+	fmt.Printf("[%s client] no ack after %d attempts, closing connection\n", c.Protocol, maxRetries)
 	c.conn.Close()
-	return fmt.Errorf("failed to receive ack after 5 attempts")
+	c.conn = nil
+}
+
+func (c *Client) readFromConn(buf []byte) (int, net.Addr, error) {
+	switch conn := c.conn.(type) {
+	case *net.UDPConn:
+		return conn.ReadFrom(buf)
+	default: // TCP
+		n, err := conn.Read(buf)
+		return n, nil, err
+	}
 }

@@ -23,7 +23,6 @@ func main() {
 	if err := clientA.Connect(); err != nil {
 		panic(err)
 	}
-	clientA.SendAuth()
 
 	// Client B: UDP unicast
 	clientB := client.Client{
@@ -35,7 +34,6 @@ func main() {
 	if err := clientB.Connect(); err != nil {
 		panic(err)
 	}
-	clientB.SendAuth()
 
 	// Client C: UDP multicast
 	clientC := client.Client{
@@ -47,7 +45,6 @@ func main() {
 	if err := clientC.Connect(); err != nil {
 		panic(err)
 	}
-	clientC.SendAuth()
 
 	// Client D: UDP multicast
 	clientD := client.Client{
@@ -59,7 +56,6 @@ func main() {
 	if err := clientD.Connect(); err != nil {
 		panic(err)
 	}
-	clientD.SendAuth()
 
 	// Run them all in background loops
 	go func() {
