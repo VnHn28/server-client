@@ -50,7 +50,9 @@ func TestServerClientCommunication(t *testing.T) {
 		go func(cli *client.Client) {
 			defer wg.Done()
 			for range 2 {
-				cli.SendTime()
+				if !cli.SendTime() {
+					break
+				}
 				time.Sleep(7 * time.Second)
 			}
 			fmt.Printf("[%s client] completed test iterations\n", cli.Protocol)

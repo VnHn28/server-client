@@ -43,7 +43,9 @@ func main() {
 
 		go func(cli *client.Client) {
 			for {
-				cli.SendTime()
+				if !cli.SendTime() {
+					break
+				}
 				time.Sleep(7 * time.Second)
 			}
 		}(c)

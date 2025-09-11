@@ -127,10 +127,10 @@ func (c *Client) connectUDPMulticast() error {
 
 // SendTime sends current time to server and waits for ACK
 // Retries up to 5 times if no ACK received within 2 seconds
-func (c *Client) SendTime() {
+func (c *Client) SendTime() bool {
 	if c.conn == nil {
 		fmt.Printf("[client %s %s] no connection, cannot send time\n", c.Protocol, c.Username)
-		return
+		return false
 	}
 
 	tmsg := protocol.TimeMessage{Timestamp: time.Now()}
@@ -145,12 +145,12 @@ func (c *Client) SendTime() {
 	for attempt := 1; attempt <= maxRetries; attempt++ {
 		if _, err := c.conn.Write(data); err != nil {
 			fmt.Printf("[client %s %s] failed to send time: %v\n", c.Protocol, c.Username, err)
-			return
+			return false
 		}
 
 		if err := c.conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
 			fmt.Printf("[client %s %s] failed to set deadline: %v\n", c.Protocol, c.Username, err)
-			return
+			return false
 		}
 
 		buf := make([]byte, 1024)
@@ -159,7 +159,7 @@ func (c *Client) SendTime() {
 			var ack protocol.AckMessage
 			if decodeErr := protocol.Decode(buf[:n], &ack); decodeErr == nil {
 				fmt.Printf("[client %s %s] received ack: %s\n", c.Protocol, c.Username, ack.Status)
-				return
+				return true
 			}
 		}
 
@@ -169,6 +169,7 @@ func (c *Client) SendTime() {
 	fmt.Printf("[client %s %s] no ack after %d attempts, closing connection\n", c.Protocol, c.Username, maxRetries)
 	c.conn.Close()
 	c.conn = nil
+	return false
 }
 
 func (c *Client) readFromConn(buf []byte) (int, net.Addr, error) {
